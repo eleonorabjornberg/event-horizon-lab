@@ -53,7 +53,7 @@ then go to http://localhost:8000.
 - Disk Doppler beaming uses a simplified special-relativistic factor times the static gravitational redshift.
 - The probe's redshift is computed along a single radial line of sight.
 - The amount of tidal stretch drawn is a log-scaled visual indicator; the tidal numbers are exact.
-- The probe is drawn at a fixed size in horizon radii, not to scale (a 2 m probe would be invisible beside a stellar hole and far bigger than a mountain-mass one). As its light is redshifted away it fades and stops hiding the disk behind it, so a probe frozen at the horizon vanishes into the edge of the shadow.
+- The probe is drawn at a fixed size in horizon radii, not to scale. Once its light is redshifted too far to see, it is drawn as a faint red ghost frozen at the edge of the shadow, so you can still find it; the real image fades to nothing.
 - Spinning (Kerr) black holes are not modelled.
 - Hawking emission counts photons only and ignores greybody factors, so the power is too low and the lifetime too long for small holes, which also emit neutrinos, gravitons and heavier particles once hot enough.
 - Evaporation ignores the cosmic microwave background, so it runs even for holes that are growing today; the panel says so.

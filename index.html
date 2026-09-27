@@ -315,10 +315,12 @@ void main(){
         float limb = sqrt(1.0 - dObj*dObj);
         float g = uObjG;
         vec3 oc = blackbody(14000.0*g) * pow(g, 4.0) * (0.5 + 0.7*limb) * 4.0;
-        // A probe whose light is redshifted away also stops hiding what lies behind it:
-        // its image shrinks onto the edge of the shadow and fades out, as a distant observer sees it.
-        float opac = clamp(g*20.0, 0.0, 1.0);
-        col += trans * oc * opac;
+        // Its real light is redshifted to nothing, so once it is too dim to see it is drawn as a
+        // faint red ghost frozen at the edge of the shadow (false colour, flagged in the panel).
+        float real = clamp(g*20.0, 0.0, 1.0);
+        float opac = max(real, 0.55);
+        vec3 ghost = vec3(0.30, 0.03, 0.02) * (0.6 + 0.4*limb) * (1.0 - real);
+        col += trans * (oc * real + ghost);
         trans *= 1.0 - opac;
         objDone = 1.0;
         if (trans < 0.02) break;
@@ -559,7 +561,7 @@ void main(){
     const msg = probe.hover
       ? 'Hovering on rockets at ' + fmtNum(unruhA(probe.r)/9.81, 1) + ' g. Its clock runs ' + fmtNum(1/Math.sqrt(1 - 1/probe.r), 2) + ' times slower than yours.'
       : above < 1e-3
-      ? 'On its own clock the probe crossed at ' + fmtTime(probe.tauH*T) + ' and is already inside. From out here, its image is frozen at the edge and fading.'
+      ? 'On its own clock the probe crossed at ' + fmtTime(probe.tauH*T) + ' and is already inside. From out here, its image is frozen at the edge. Its real light has faded to nothing; the red ghost marks where it would be.'
       : 'Distances are in horizon radii (r). One r here is ' + fmtLen(rsMeters()) + '.';
     document.getElementById('pmsg').textContent = msg;
   }
