@@ -291,6 +291,7 @@ void main(){
   vec3 col = vec3(0.0);
   float trans = 1.0;
   float minD = 99.0, transMin = 1.0;
+  float objDone = 0.0;
   for (int i = 0; i < 420; i++) {
     float r2 = dot(x, x);
     float r = sqrt(r2);
@@ -301,7 +302,7 @@ void main(){
     vec3 vn = v + a*dt;
     vec3 xn = x + vn*dt;
 
-    if (uObjOn > 0.5) {
+    if (uObjOn > 0.5 && objDone < 0.5) {
       float ea = 0.4*uObjS, eb = 0.4/sqrt(uObjS);
       vec3 ra = x - uObjPos, rb = xn - uObjPos;
       vec3 A = uObjDir*dot(ra,uObjDir)/ea + (ra - uObjDir*dot(ra,uObjDir))/eb;
@@ -314,9 +315,13 @@ void main(){
         float limb = sqrt(1.0 - dObj*dObj);
         float g = uObjG;
         vec3 oc = blackbody(14000.0*g) * pow(g, 4.0) * (0.5 + 0.7*limb) * 4.0;
-        col += trans * oc;
-        trans = 0.0;
-        break;
+        // A probe whose light is redshifted away also stops hiding what lies behind it:
+        // its image shrinks onto the edge of the shadow and fades out, as a distant observer sees it.
+        float opac = clamp(g*20.0, 0.0, 1.0);
+        col += trans * oc * opac;
+        trans *= 1.0 - opac;
+        objDone = 1.0;
+        if (trans < 0.02) break;
       }
     }
 
