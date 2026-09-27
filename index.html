@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Event Horizon Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --panel: rgba(246,244,250,0.92);
+  --ink: #1b1930;
+  --muted: #5d5a73;
+  --line: rgba(27,25,48,0.14);
+  --gold: #b9781a;
+  --gold-ink: #1b1930;
+  --red: #b3362a;
+  --field: rgba(27,25,48,0.06);
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --panel: rgba(12,11,24,0.78);
+    --ink: #ece9f2;
+    --muted: #a09db6;
+    --line: rgba(236,233,242,0.14);
+    --gold: #f2b24c;
+    --red: #e0634e;
+    --field: rgba(236,233,242,0.07);
+  }
+}
+:root[data-theme="dark"]{
+  --panel: rgba(12,11,24,0.78); --ink:#ece9f2; --muted:#a09db6; --line:rgba(236,233,242,0.14);
+  --gold:#f2b24c; --red:#e0634e; --field:rgba(236,233,242,0.07);
+}
+*,*::before,*::after{ box-sizing: inherit; }
+html{ height:100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body{ margin:0; height:100%; background:#000; color:var(--ink);
+  font-family:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:15px; line-height:1.45; overflow:hidden; }
+canvas{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+canvas:active{ cursor:grabbing; }
+.panel{ position:fixed; top:calc(16px + env(safe-area-inset-top, 0px)); left:16px; bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+  width:340px; max-width:calc(100% - 32px); overflow-y:auto; background:var(--panel);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border:1px solid var(--line); border-radius:14px; padding:20px 20px 16px; }
+h1{ font-family:"Newsreader", Georgia, serif; font-weight:600; font-size:30px; line-height:1.05; margin:0 0 6px; letter-spacing:-0.01em; }
+.lede{ color:var(--muted); margin:0 0 14px; font-size:14px; }
+section{ border-top:1px solid var(--line); padding:14px 0 4px; }
+h2{ font-family:"Newsreader", Georgia, serif; font-weight:600; font-size:19px; margin:0 0 8px; }
+.row{ display:flex; justify-content:space-between; gap:12px; padding:3px 0; font-variant-numeric: tabular-nums; }
+.row span:first-child{ color:var(--muted); }
+.row span:last-child{ text-align:right; }
+.note{ font-size:13px; color:var(--muted); margin:8px 0; }
+.verdict{ font-size:14px; margin:8px 0 6px; }
+input[type=range]{ width:100%; accent-color: var(--gold); margin:4px 0 6px; }
+.presets{ display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px; }
+button, .file{ font:inherit; font-size:14px; color:var(--ink); background:var(--field); border:1px solid var(--line);
+  border-radius:999px; padding:6px 12px; cursor:pointer; }
+button:hover, .file:hover{ border-color:var(--muted); }
+button.primary{ background:var(--gold); color:#1b1930; border-color:transparent; font-weight:700; padding:8px 16px; }
+button:focus-visible, input:focus-visible, .file:focus-within{ outline:2px solid var(--gold); outline-offset:2px; }
+.actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.toggles label{ display:flex; gap:8px; align-items:center; padding:3px 0; cursor:pointer; }
+.toggles input{ accent-color: var(--gold); }
+.file input{ position:absolute; opacity:0; width:1px; height:1px; }
+.zbar{ height:6px; border-radius:3px; background:var(--field); overflow:hidden; margin:4px 0 2px; }
+.zbar i{ display:block; height:100%; width:0; background:linear-gradient(90deg, var(--gold), var(--red)); }
+.msg{ font-size:14px; min-height:2.9em; margin:8px 0 4px; }
+.hide{ position:fixed; right:16px; top:calc(16px + env(safe-area-inset-top, 0px)); display:none; }
+.err{ position:fixed; inset:auto 16px calc(16px + env(safe-area-inset-bottom,0px)) auto; max-width:320px; background:var(--panel); padding:12px; border-radius:10px; display:none; }
+@media (max-width: 720px){
+  .panel{ top:auto; left:0; right:0; bottom:0; width:100%; max-width:none; max-height:46%; border-radius:14px 14px 0 0;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom, 0px)); }
+  h1{ font-size:24px; }
+  .hide{ display:block; }
+  body.collapsed .panel{ display:none; }
+}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Rendered black hole. Drag to orbit, scroll to zoom."></canvas>
+<button class="hide" id="hide" aria-expanded="true">Hide panel</button>
+<aside class="panel" id="panel">
+  <h1>Event Horizon Lab</h1>
+  <p class="lede">A non-spinning black hole, ray-traced through curved spacetime. Drag to orbit, scroll or use the slider to zoom.</p>
+
+  <section>
+    <h2>The black hole</h2>
+    <label for="mass" class="note" style="display:block;margin:0">Mass: <strong id="massLabel"></strong></label>
+    <input id="mass" type="range" min="0" max="10" step="0.01" value="0">
+    <div class="presets">
+      <button data-m="1">Sun</button>
+      <button data-m="4.3e6">Sagittarius A*</button>
+      <button data-m="6.5e9">M87*</button>
+    </div>
+    <div class="row"><span>Event horizon radius</span><span id="rs"></span></div>
+    <div class="row"><span>Light-crossing time</span><span id="tc"></span></div>
+    <div class="row"><span>Tidal stretch at horizon</span><span id="tid"></span></div>
+    <p class="verdict" id="verdict"></p>
+    <p class="note">The picture looks the same at every mass. Mass changes the size, the timescales and the tides.</p>
+  </section>
+
+  <section>
+    <h2>Drop a probe</h2>
+    <div class="actions">
+      <button class="primary" id="drop">Drop probe</button>
+      <button id="reset">Remove</button>
+    </div>
+    <div class="row" style="margin-top:10px"><span>Distance from centre</span><span id="pr">–</span></div>
+    <div class="row"><span>Your clock, far away</span><span id="pt">–</span></div>
+    <div class="row"><span>The probe's own clock</span><span id="ptau">–</span></div>
+    <div class="row"><span>Light stretched by (1 + z)</span><span id="pz">–</span></div>
+    <div class="row"><span>Tidal pull across a 2 m probe</span><span id="ptid">–</span></div>
+    <div class="row"><span>Probe</span><span id="pstate">–</span></div>
+    <div class="row"><span>One second on screen</span><span id="pplay">–</span></div>
+    <div class="zbar" aria-hidden="true"><i id="zfill"></i></div>
+    <p class="msg" id="pmsg">Watch it from here: it slows, reddens and fades at the edge, but never crosses.</p>
+  </section>
+
+  <section>
+    <h2>The quantum side</h2>
+    <div class="row"><span>Hawking temperature</span><span id="th"></span></div>
+    <div class="row"><span>Time to evaporate</span><span id="te"></span></div>
+    <p class="note">Quantum effects make black holes glow faintly and shrink. Smaller ones are hotter. Whether what falls in is lost for good is the black hole information paradox, still unsolved.</p>
+  </section>
+
+  <section>
+    <h2>Sky</h2>
+    <label for="dist" class="note" style="display:block;margin:0">Camera distance: <span id="distLabel"></span></label>
+    <input id="dist" type="range" min="6" max="40" step="0.1" value="22">
+    <div class="toggles">
+      <label><input type="checkbox" id="disk" checked> Accretion disk</label>
+      <label><input type="checkbox" id="grid"> Sky grid, to see the bending</label>
+    </div>
+    <div class="actions" style="margin:8px 0 4px">
+      <label class="file" tabindex="-1">Use my own sky image<input type="file" id="file" accept="image/*"></label>
+      <button id="clearSky">Back to stars</button>
+    </div>
+    <p class="note">Stand-in for a Reactor frame: any image is wrapped around the sky and bent by the black hole.</p>
+  </section>
+</aside>
+<div class="err" id="err">This page needs WebGL, which this browser has turned off. Try a recent Chrome, Safari or Firefox.</div>
+
+<script id="fs" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uCamPos;
+uniform vec3 uFwd;
+uniform vec3 uRight;
+uniform vec3 uUp;
+uniform vec3 uObjPos;
+uniform float uObjOn;
+uniform float uObjG;
+uniform float uObjS;
+uniform vec3 uObjDir;
+uniform float uDiskOn;
+uniform float uGridOn;
+uniform float uSkyOn;
+uniform sampler2D uSky;
+
+const float PI = 3.14159265;
+
+float hash(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7)))*43758.5453); }
+float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p){
+  vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
+  float a = hash2(i), b = hash2(i+vec2(1.0,0.0)), c = hash2(i+vec2(0.0,1.0)), d = hash2(i+vec2(1.0,1.0));
+  return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+}
+float fbm(vec2 p){ float s=0.0, a=0.5; for(int i=0;i<4;i++){ s+=a*noise(p); p*=2.03; a*=0.5; } return s; }
+
+vec3 blackbody(float t){
+  t = clamp(t, 1000.0, 40000.0) / 100.0;
+  float r = t <= 66.0 ? 1.0 : clamp(1.29293618*pow(t-60.0,-0.1332047592), 0.0, 1.0);
+  float g = t <= 66.0 ? clamp(0.39008157*log(t)-0.63184144, 0.0, 1.0)
+                      : clamp(1.12989086*pow(t-60.0,-0.0755148492), 0.0, 1.0);
+  float b = t >= 66.0 ? 1.0 : (t <= 19.0 ? 0.0 : clamp(0.54320679*log(t-10.0)-1.19625408, 0.0, 1.0));
+  return pow(vec3(r,g,b), vec3(2.2));
+}
+
+vec3 starLayer(vec3 d, float scale, float thresh){
+  vec3 p = d*scale; vec3 i = floor(p); vec3 f = fract(p) - 0.5;
+  float h = hash(i);
+  if (h < thresh) return vec3(0.0);
+  float b = smoothstep(0.32, 0.0, length(f)) * (h - thresh) / (1.0 - thresh);
+  vec3 tint = mix(vec3(1.0,0.78,0.6), vec3(0.72,0.82,1.0), hash(i+7.0));
+  return tint * b * 2.0;
+}
+
+vec3 sky(vec3 d){
+  vec3 col = vec3(0.0);
+  float u = atan(d.z, d.x)/(2.0*PI) + 0.5;
+  float v = asin(clamp(d.y,-1.0,1.0))/PI + 0.5;
+  if (uSkyOn > 0.5) {
+    col = texture2D(uSky, vec2(u, 1.0 - v)).rgb;
+    col = pow(col, vec3(2.2));
+  } else {
+    col += starLayer(d, 140.0, 0.975);
+    col += starLayer(d, 320.0, 0.985) * 0.6;
+    float n = fbm(vec2(u*12.0, v*6.0));
+    col += vec3(0.05,0.03,0.09) * smoothstep(0.45, 0.9, n) * (1.0 - abs(d.y));
+  }
+  if (uGridOn > 0.5) {
+    vec2 gp = vec2(u*36.0, v*18.0);
+    vec2 gf = abs(fract(gp) - 0.5);
+    float line = 1.0 - smoothstep(0.0, 0.035, min(gf.x, gf.y));
+    col += vec3(0.25,0.45,0.9) * line * 0.5;
+  }
+  return col;
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
+  float tanF = 0.62;
+  vec3 x = uCamPos;
+  vec3 v = normalize(uFwd + uv.x*tanF*uRight + uv.y*tanF*uUp);
+  vec3 L = cross(x, v);
+  float h2 = dot(L, L);
+  vec3 col = vec3(0.0);
+  float trans = 1.0;
+  for (int i = 0; i < 420; i++) {
+    float r2 = dot(x, x);
+    float r = sqrt(r2);
+    if (r2 < 1.0) { break; }
+    if (r2 > 1600.0 && dot(x, v) > 0.0) { col += trans * sky(normalize(v)); break; }
+    float dt = clamp(0.045*r, 0.01, 2.0);
+    vec3 a = -1.5 * h2 * x / (r2*r2*r);
+    vec3 vn = v + a*dt;
+    vec3 xn = x + vn*dt;
+
+    if (uObjOn > 0.5) {
+      float ea = 0.4*uObjS, eb = 0.4/sqrt(uObjS);
+      vec3 ra = x - uObjPos, rb = xn - uObjPos;
+      vec3 A = uObjDir*dot(ra,uObjDir)/ea + (ra - uObjDir*dot(ra,uObjDir))/eb;
+      vec3 B = uObjDir*dot(rb,uObjDir)/ea + (rb - uObjDir*dot(rb,uObjDir))/eb;
+      vec3 sg = B - A;
+      float tt = clamp(-dot(A, sg)/max(dot(sg,sg),1e-6), 0.0, 1.0);
+      float dObj = length(A + sg*tt);
+      if (dObj < 1.0) {
+        float limb = sqrt(1.0 - dObj*dObj);
+        float g = uObjG;
+        vec3 oc = blackbody(14000.0*g) * pow(g, 4.0) * (0.5 + 0.7*limb) * 4.0;
+        col += trans * oc;
+        trans = 0.0;
+        break;
+      }
+    }
+
+    if (uDiskOn > 0.5 && x.y*xn.y < 0.0) {
+      vec3 p = x + (xn - x) * (x.y/(x.y - xn.y));
+      float rd = length(p);
+      if (rd > 3.0 && rd < 14.0) {
+        vec3 n = -normalize(vn);
+        vec3 tang = normalize(vec3(p.z, 0.0, -p.x));
+        float beta = sqrt(0.5/(rd - 1.0));
+        float gam = 1.0/sqrt(1.0 - beta*beta);
+        float D = 1.0/(gam*(1.0 - beta*dot(tang, n)));
+        float g = sqrt(1.0 - 1.0/rd) * D;
+        float prof = pow(rd/3.0, -0.75) * pow(max(1.0 - sqrt(3.0/rd), 0.0), 0.25);
+        float om = sqrt(0.5/(rd*rd*rd));
+        float ang = -om*uTime*6.0;
+        vec2 q = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz;
+        float swirl = 0.55 + 0.9*fbm(q*1.6 + vec2(0.0, rd*0.8));
+        float edge = smoothstep(14.0, 10.0, rd);
+        float dens = clamp(prof*1.6*swirl*edge, 0.0, 1.0);
+        vec3 dc = blackbody(8500.0*prof*g) * pow(g, 4.0) * prof * swirl * 1.6;
+        float alpha = 0.92*dens;
+        col += trans * dc * alpha;
+        trans *= 1.0 - alpha;
+        if (trans < 0.02) break;
+      }
+    }
+    x = xn; v = vn;
+  }
+  col = 1.0 - exp(-col*1.1);
+  col = pow(col, vec3(1.0/2.2));
+  gl_FragColor = vec4(col, 1.0);
+}
+
+</script>
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const gl = canvas.getContext('webgl', {antialias:false, powerPreference:'high-performance'});
+  if (!gl) { document.getElementById('err').style.display = 'block'; return; }
+
+  const vsSrc = 'attribute vec2 p; void main(){ gl_Position = vec4(p,0.0,1.0); }';
+  function sh(type, src){ const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); document.getElementById('err').textContent = 'The shader failed to compile on this device.'; document.getElementById('err').style.display='block'; }
+    return s; }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, vsSrc));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = {}; ['uRes','uTime','uCamPos','uFwd','uRight','uUp','uObjPos','uObjOn','uObjG','uObjS','uObjDir','uDiskOn','uGridOn','uSkyOn','uSky'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0,0,0,255]));
+  function texParams(){ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); }
+  texParams();
+  let skyOn = 0;
+
+  // ---- state ----
+  let yaw = 0.35, pitch = 0.16, dist = 22;
+  let massSun = 1;
+  const probe = { on:false, r0:10, r:10, t:0, tau:0, E:1, dir:[1,0,0], tauH:0 };
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- physical constants ----
+  const G = 6.674e-11, c = 2.998e8, Msun = 1.989e30;
+  function fmtNum(x, d){ if (!isFinite(x)) return '∞'; if (x !== 0 && (Math.abs(x) >= 1e5 || Math.abs(x) < 1e-3)) { const e = Math.floor(Math.log10(Math.abs(x))); return (x/Math.pow(10,e)).toFixed(d==null?1:d) + ' × 10' + sup(e); } return x.toLocaleString('en-US', {maximumFractionDigits: d==null?2:d}); }
+  function sup(e){ const m = {'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'}; return String(e).split('').map(ch => m[ch]).join(''); }
+  function fmtTime(s){
+    if (!isFinite(s)) return 'never';
+    const a = Math.abs(s);
+    if (a < 1e-6) return fmtNum(s*1e9, 2) + ' ns';
+    if (a < 1e-3) return fmtNum(s*1e6, 2) + ' µs';
+    if (a < 1) return fmtNum(s*1e3, 2) + ' ms';
+    if (a < 120) return fmtNum(s, 2) + ' s';
+    if (a < 7200) return fmtNum(s/60, 1) + ' min';
+    if (a < 172800) return fmtNum(s/3600, 1) + ' h';
+    const y = s/3.156e7;
+    if (y < 1) return fmtNum(s/86400, 1) + ' days';
+    return fmtNum(y, 1) + ' years';
+  }
+  function fmtLen(m){ if (m < 1000) return fmtNum(m,1) + ' m'; const km = m/1000; if (km < 1.496e7) return fmtNum(km, km<100?2:0) + ' km'; return fmtNum(m/1.496e11, 1) + ' AU'; }
+  function massText(m){ return m < 1e3 ? fmtNum(m,2) + (m===1?' solar mass':' solar masses') : fmtNum(m,1) + ' solar masses'; }
+
+  function rsMeters(){ return 2*G*massSun*Msun/(c*c); }
+  function unitTime(){ return rsMeters()/c; }
+
+  function updateMass(){
+    const rs = rsMeters();
+    document.getElementById('massLabel').textContent = massText(massSun);
+    document.getElementById('rs').textContent = fmtLen(rs);
+    document.getElementById('tc').textContent = fmtTime(rs/c);
+    const tidal = 2*G*massSun*Msun*2/(rs*rs*rs); // 2 m tall body at the horizon
+    const gs = tidal/9.81;
+    document.getElementById('tid').textContent = fmtNum(gs, 1) + ' g';
+    let v;
+    if (gs > 1000) v = 'A person falling in is torn apart well before reaching the horizon.';
+    else if (gs > 10) v = 'Tides at the horizon would already be crushing for a person.';
+    else v = 'A person would cross the horizon without feeling anything special.';
+    document.getElementById('verdict').textContent = v;
+    const TH = 6.17e-8 / massSun;
+    document.getElementById('th').textContent = fmtNum(TH, 2) + ' K';
+    document.getElementById('te').textContent = fmtNum(2.1e67*Math.pow(massSun,3), 1) + ' years';
+  }
+
+  const massIn = document.getElementById('mass');
+  massIn.addEventListener('input', () => { massSun = Math.pow(10, parseFloat(massIn.value)); updateMass(); updateProbeText(); });
+  document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => {
+    massSun = parseFloat(b.dataset.m); massIn.value = Math.log10(massSun); updateMass(); updateProbeText(); }));
+
+  const distIn = document.getElementById('dist');
+  function setDist(d){ dist = Math.min(40, Math.max(6, d)); distIn.value = dist; document.getElementById('distLabel').textContent = dist.toFixed(1) + ' horizon radii'; }
+  distIn.addEventListener('input', () => setDist(parseFloat(distIn.value)));
+  setDist(dist);
+
+  // ---- camera ----
+  function camera(){
+    const cp = [dist*Math.cos(pitch)*Math.cos(yaw), dist*Math.sin(pitch), dist*Math.cos(pitch)*Math.sin(yaw)];
+    const f = norm([-cp[0],-cp[1],-cp[2]]);
+    const r = norm(cross(f,[0,1,0]));
+    const u = cross(r,f);
+    return {cp, f, r, u};
+  }
+  function norm(a){ const l = Math.hypot(a[0],a[1],a[2]); return [a[0]/l,a[1]/l,a[2]/l]; }
+  function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+
+  let dragging = false, lx = 0, ly = 0;
+  canvas.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', e => { if (!dragging) return; yaw -= (e.clientX-lx)*0.006; pitch = Math.max(-1.45, Math.min(1.45, pitch + (e.clientY-ly)*0.006)); lx = e.clientX; ly = e.clientY; });
+  canvas.addEventListener('pointerup', () => dragging = false);
+  canvas.addEventListener('pointercancel', () => dragging = false);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); setDist(dist * Math.exp(e.deltaY*0.001)); }, {passive:false});
+
+  // ---- probe: radial free fall from rest, units r_s = c = 1 ----
+  function drop(){
+    const cam = camera();
+    const d = norm([cam.r[0]*0.8 - cam.f[0]*0.3 + cam.u[0]*0.6, cam.r[1]*0.8 - cam.f[1]*0.3 + cam.u[1]*0.6, cam.r[2]*0.8 - cam.f[2]*0.3 + cam.u[2]*0.6]);
+    probe.on = true; probe.r0 = 10; probe.r = 10*0.9999; probe.t = 0; probe.tau = 0; probe.dir = d;
+    probe.E = Math.sqrt(1 - 1/probe.r0);
+    const ce = 2/probe.r0 - 1, eta = Math.acos(ce);
+    probe.tauH = Math.pow(probe.r0,1.5)/2*(eta + Math.sin(eta));
+  }
+  document.getElementById('drop').addEventListener('click', drop);
+  document.getElementById('reset').addEventListener('click', () => { probe.on = false; updateProbeText(); });
+
+  function stepProbe(dtSim){
+    if (!probe.on) return;
+    const n = 40, h = dtSim/n;
+    for (let i=0;i<n;i++){
+      const r = probe.r, f = 1 - 1/r;
+      if (f <= 1e-12) break;
+      const drdt = -f*Math.sqrt(Math.max(1/r - 1/probe.r0, 0))/probe.E;
+      probe.r = Math.max(1 + 1e-13, r + drdt*h);
+      probe.tau += f/probe.E*h;
+      probe.t += h;
+    }
+  }
+  const SPEED = 9;
+  function probeTidalG(){ const rm = probe.r*rsMeters(); return 2*G*massSun*Msun*2/(rm*rm*rm)/9.81; }
+  function probeStretch(){ const tg = probeTidalG(); return tg <= 10 ? 1 : Math.min(8, 1 + 0.8*Math.log10(tg/10)); }
+  function probeZ(){ const f = Math.max(1 - 1/probe.r, 1e-13); const E = probe.E; return (E + Math.sqrt(Math.max(E*E - f, 0)))/f; }
+
+  function updateProbeText(){
+    const ids = ['pr','pt','ptau','pz','ptid','pstate','pplay'];
+    if (!probe.on){ ids.forEach(i => document.getElementById(i).textContent = '–'); document.getElementById('zfill').style.width = '0';
+      document.getElementById('pmsg').textContent = 'Watch it from here: it slows, reddens and fades at the edge, but never crosses.'; return; }
+    const T = unitTime();
+    const above = probe.r - 1;
+    document.getElementById('pr').textContent = above < 1e-3 ? 'horizon + ' + fmtNum(above,1) + ' r' : fmtNum(probe.r, 3) + ' r';
+    document.getElementById('pt').textContent = fmtTime(probe.t*T);
+    document.getElementById('ptau').textContent = fmtTime(probe.tau*T);
+    const z = probeZ();
+    document.getElementById('pz').textContent = fmtNum(z, 2) + '×';
+    document.getElementById('zfill').style.width = Math.min(100, Math.log10(z)/4*100) + '%';
+    const tg = probeTidalG();
+    document.getElementById('ptid').textContent = fmtNum(tg, 1) + ' g';
+    document.getElementById('pstate').textContent = tg > 1000 ? 'Spaghettified' : (tg > 10 ? 'Stretching' : 'Intact');
+    document.getElementById('pplay').textContent = '≈ ' + fmtTime(SPEED*T) + ' of real fall';
+    const msg = above < 1e-3
+      ? 'On its own clock the probe crossed at ' + fmtTime(probe.tauH*T) + ' and is already inside. From out here, its image is frozen at the edge and fading.'
+      : 'Distances are in horizon radii (r). One r here is ' + fmtLen(rsMeters()) + '.';
+    document.getElementById('pmsg').textContent = msg;
+  }
+
+  // ---- toggles and sky image ----
+  const diskIn = document.getElementById('disk'), gridIn = document.getElementById('grid');
+  document.getElementById('file').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { const img = new Image(); img.onload = () => {
+      gl.bindTexture(gl.TEXTURE_2D, tex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img); texParams(); skyOn = 1; };
+      img.src = rd.result; };
+    rd.readAsDataURL(f);
+  });
+  document.getElementById('clearSky').addEventListener('click', () => { skyOn = 0; });
+
+  const hideBtn = document.getElementById('hide');
+  hideBtn.addEventListener('click', () => { const c = document.body.classList.toggle('collapsed'); hideBtn.textContent = c ? 'Show panel' : 'Hide panel'; hideBtn.setAttribute('aria-expanded', String(!c)); });
+
+  // ---- render ----
+  let scale = window.innerWidth < 720 ? 0.45 : 0.7;
+  function resize(){ const dpr = Math.min(window.devicePixelRatio||1, 2); canvas.width = Math.round(window.innerWidth*dpr*scale); canvas.height = Math.round(window.innerHeight*dpr*scale); gl.viewport(0,0,canvas.width,canvas.height); }
+  window.addEventListener('resize', resize); resize();
+
+  let last = performance.now(), simTime = 0, textTimer = 0, slow = 0;
+  function frame(now){
+    const dt = Math.min((now - last)/1000, 0.1); last = now;
+    if (!reduceMotion) simTime += dt;
+    stepProbe(dt*SPEED);
+    if (dt > 0.05) { slow++; if (slow > 20 && scale > 0.3) { scale *= 0.8; resize(); slow = 0; } } else slow = Math.max(0, slow-1);
+    const cam = camera();
+    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    gl.uniform1f(U.uTime, simTime);
+    gl.uniform3fv(U.uCamPos, cam.cp); gl.uniform3fv(U.uFwd, cam.f); gl.uniform3fv(U.uRight, cam.r); gl.uniform3fv(U.uUp, cam.u);
+    if (probe.on){ const d = probe.dir, r = probe.r; gl.uniform3f(U.uObjPos, d[0]*r, d[1]*r, d[2]*r); gl.uniform1f(U.uObjG, 1/probeZ()); gl.uniform1f(U.uObjS, probeStretch()); gl.uniform3fv(U.uObjDir, d); }
+    gl.uniform1f(U.uObjOn, probe.on ? 1 : 0);
+    gl.uniform1f(U.uDiskOn, diskIn.checked ? 1 : 0);
+    gl.uniform1f(U.uGridOn, gridIn.checked ? 1 : 0);
+    gl.uniform1f(U.uSkyOn, skyOn);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(U.uSky, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    textTimer += dt; if (textTimer > 0.1) { textTimer = 0; updateProbeText(); }
+    requestAnimationFrame(frame);
+  }
+  window.EHL = { probe, drop };
+  updateMass(); updateProbeText();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
