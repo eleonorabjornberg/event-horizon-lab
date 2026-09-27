@@ -69,14 +69,17 @@ button:focus-visible, input:focus-visible, .file:focus-within{ outline:2px solid
 .zbar{ height:6px; border-radius:3px; background:var(--field); overflow:hidden; margin:4px 0 2px; }
 .zbar i{ display:block; height:100%; width:0; background:linear-gradient(90deg, var(--gold), var(--red)); }
 .msg{ font-size:14px; min-height:2.9em; margin:8px 0 4px; }
-.hide{ position:fixed; right:16px; top:calc(16px + env(safe-area-inset-top, 0px)); display:none; }
+.hide{ position:fixed; right:16px; top:calc(16px + env(safe-area-inset-top, 0px)); background:var(--panel); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+body.collapsed .panel{ display:none; }
+@media (max-width: 1100px) and (min-width: 721px){ .panel{ width:300px; } h1{ font-size:26px; } }
+.plot{ position:static; inset:auto; width:100%; height:84px; display:block; cursor:default; touch-action:auto; background:var(--field); border-radius:8px; margin:10px 0 4px; }
+h3{ font-size:14px; font-weight:700; margin:14px 0 6px; }
+.flash{ position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 1.6s ease-out; }
 .err{ position:fixed; inset:auto 16px calc(16px + env(safe-area-inset-bottom,0px)) auto; max-width:320px; background:var(--panel); padding:12px; border-radius:10px; display:none; }
 @media (max-width: 720px){
   .panel{ top:auto; left:0; right:0; bottom:0; width:100%; max-width:none; max-height:46%; border-radius:14px 14px 0 0;
     padding-bottom:calc(16px + env(safe-area-inset-bottom, 0px)); }
   h1{ font-size:24px; }
-  .hide{ display:block; }
-  body.collapsed .panel{ display:none; }
 }
 </style>
 </head>
@@ -90,8 +93,10 @@ button:focus-visible, input:focus-visible, .file:focus-within{ outline:2px solid
   <section>
     <h2>The black hole</h2>
     <label for="mass" class="note" style="display:block;margin:0">Mass: <strong id="massLabel"></strong></label>
-    <input id="mass" type="range" min="0" max="10" step="0.01" value="0">
+    <input id="mass" type="range" min="-20" max="10" step="0.01" value="0">
     <div class="presets">
+      <button data-m="5.03e-19">A mountain</button>
+      <button data-m="3.7e-8">The Moon</button>
       <button data-m="1">Sun</button>
       <button data-m="4.3e6">Sagittarius A*</button>
       <button data-m="6.5e9">M87*</button>
@@ -122,9 +127,26 @@ button:focus-visible, input:focus-visible, .file:focus-within{ outline:2px solid
 
   <section>
     <h2>The quantum side</h2>
+    <p class="note" style="margin-top:0">Quantum mechanics makes a black hole glow faintly, like any warm object, and slowly lose mass. The smaller the hole, the hotter the glow.</p>
     <div class="row"><span>Hawking temperature</span><span id="th"></span></div>
+    <div class="row"><span>Glow peaks at</span><span id="tlam"></span></div>
+    <div class="row"><span>Power radiated</span><span id="tpow"></span></div>
     <div class="row"><span>Time to evaporate</span><span id="te"></span></div>
-    <p class="note">Quantum effects make black holes glow faintly and shrink. Smaller ones are hotter. Whether what falls in is lost for good is the black hole information paradox, still unsolved.</p>
+    <p class="verdict" id="tcmb"></p>
+    <div class="toggles"><label><input type="checkbox" id="hawk"> Show the Hawking glow</label></div>
+    <p class="note" id="hawkNote"></p>
+
+    <h3>Evaporate it</h3>
+    <div class="actions">
+      <button class="primary" id="evap">Run evaporation</button>
+      <button id="evapStop">Stop</button>
+    </div>
+    <canvas class="plot" id="evapPlot" width="600" height="168" role="img" aria-label="Mass remaining against time. It stays nearly flat, then drops to zero at the end."></canvas>
+    <div class="row"><span>Mass left</span><span id="eleft">–</span></div>
+    <div class="row"><span>Real time passed</span><span id="epass">–</span></div>
+    <div class="row"><span>Real time left</span><span id="erem">–</span></div>
+    <p class="msg" id="emsg">The mass barely moves for most of the hole's life. Losing mass makes it hotter, which makes it lose mass faster, so the end is sudden.</p>
+    <p class="note">The glow is often pictured as particle pairs splitting at the horizon. That picture is a helpful story, not the calculation. Whether what falls in is lost for good is the black hole information paradox, still unsolved.</p>
   </section>
 
   <section>
@@ -139,9 +161,10 @@ button:focus-visible, input:focus-visible, .file:focus-within{ outline:2px solid
       <label class="file" tabindex="-1">Use my own sky image<input type="file" id="file" accept="image/*"></label>
       <button id="clearSky">Back to stars</button>
     </div>
-    <p class="note">Stand-in for a Reactor frame: any image is wrapped around the sky and bent by the black hole.</p>
+    <p class="note">Any image is wrapped around the sky and bent by the black hole.</p>
   </section>
 </aside>
+<div class="flash" id="flash" aria-hidden="true"></div>
 <div class="err" id="err">This page needs WebGL, which this browser has turned off. Try a recent Chrome, Safari or Firefox.</div>
 
 <script id="fs" type="x-shader/x-fragment">
@@ -161,6 +184,9 @@ uniform float uDiskOn;
 uniform float uGridOn;
 uniform float uSkyOn;
 uniform sampler2D uSky;
+uniform vec3 uHawk;
+uniform float uGone;
+uniform vec2 uOff;
 
 const float PI = 3.14159265;
 
@@ -214,10 +240,11 @@ vec3 sky(vec3 d){
 }
 
 void main(){
-  vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes - uOff) / uRes.y;
   float tanF = 0.62;
   vec3 x = uCamPos;
   vec3 v = normalize(uFwd + uv.x*tanF*uRight + uv.y*tanF*uUp);
+  if (uGone > 0.5) { vec3 s0 = 1.0 - exp(-sky(v)*1.1); gl_FragColor = vec4(pow(s0, vec3(1.0/2.2)), 1.0); return; }
   vec3 L = cross(x, v);
   float h2 = dot(L, L);
   vec3 col = vec3(0.0);
@@ -225,7 +252,7 @@ void main(){
   for (int i = 0; i < 420; i++) {
     float r2 = dot(x, x);
     float r = sqrt(r2);
-    if (r2 < 1.0) { break; }
+    if (r2 < 1.0) { float w = clamp(1.0 - h2/6.75, 0.0, 1.0); float shim = 0.8 + 0.2*noise(uv*60.0 + uTime*3.0); col += trans * uHawk * (0.25 + 0.75*sqrt(w)) * shim; break; }
     if (r2 > 1600.0 && dot(x, v) > 0.0) { col += trans * sky(normalize(v)); break; }
     float dt = clamp(0.045*r, 0.01, 2.0);
     vec3 a = -1.5 * h2 * x / (r2*r2*r);
@@ -299,7 +326,7 @@ void main(){
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = {}; ['uRes','uTime','uCamPos','uFwd','uRight','uUp','uObjPos','uObjOn','uObjG','uObjS','uObjDir','uDiskOn','uGridOn','uSkyOn','uSky'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  const U = {}; ['uRes','uTime','uCamPos','uFwd','uRight','uUp','uObjPos','uObjOn','uObjG','uObjS','uObjDir','uDiskOn','uGridOn','uSkyOn','uSky','uHawk','uGone','uOff'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
 
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0,0,0,255]));
@@ -316,11 +343,12 @@ void main(){
 
   // ---- physical constants ----
   const G = 6.674e-11, c = 2.998e8, Msun = 1.989e30;
-  function fmtNum(x, d){ if (!isFinite(x)) return '∞'; if (x !== 0 && (Math.abs(x) >= 1e5 || Math.abs(x) < 1e-3)) { const e = Math.floor(Math.log10(Math.abs(x))); return (x/Math.pow(10,e)).toFixed(d==null?1:d) + ' × 10' + sup(e); } return x.toLocaleString('en-US', {maximumFractionDigits: d==null?2:d}); }
+  function fmtNum(x, d){ if (!isFinite(x)) return '∞'; if (x !== 0 && (Math.abs(x) >= 1e5 || Math.abs(x) < 1e-3)) { const e = Math.floor(Math.log10(Math.abs(x))); let mant = +(x/Math.pow(10,e)).toFixed(d==null?1:d); if (Math.abs(mant) >= 10) { mant /= 10; e++; } return mant.toFixed(d==null?1:d) + ' × 10' + sup(e); } return x.toLocaleString('en-US', {maximumFractionDigits: d==null?2:d}); }
   function sup(e){ const m = {'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'}; return String(e).split('').map(ch => m[ch]).join(''); }
   function fmtTime(s){
     if (!isFinite(s)) return 'never';
     const a = Math.abs(s);
+    if (a < 1e-9) return fmtNum(s, 2) + ' s';
     if (a < 1e-6) return fmtNum(s*1e9, 2) + ' ns';
     if (a < 1e-3) return fmtNum(s*1e6, 2) + ' µs';
     if (a < 1) return fmtNum(s*1e3, 2) + ' ms';
@@ -331,8 +359,8 @@ void main(){
     if (y < 1) return fmtNum(s/86400, 1) + ' days';
     return fmtNum(y, 1) + ' years';
   }
-  function fmtLen(m){ if (m < 1000) return fmtNum(m,1) + ' m'; const km = m/1000; if (km < 1.496e7) return fmtNum(km, km<100?2:0) + ' km'; return fmtNum(m/1.496e11, 1) + ' AU'; }
-  function massText(m){ return m < 1e3 ? fmtNum(m,2) + (m===1?' solar mass':' solar masses') : fmtNum(m,1) + ' solar masses'; }
+  function fmtLen(m){ if (m < 1 && m >= 1e-3) return fmtNum(m*1000, 2) + ' mm'; if (m < 1000) return fmtNum(m,1) + ' m'; const km = m/1000; if (km < 1.496e7) return fmtNum(km, km<100?2:0) + ' km'; return fmtNum(m/1.496e11, 1) + ' AU'; }
+  function massText(m){ if (m < 1e-5) return fmtNum(m*Msun, 1) + ' kg'; return m < 1e3 ? fmtNum(m,2) + (m===1?' solar mass':' solar masses') : fmtNum(m,1) + ' solar masses'; }
 
   function rsMeters(){ return 2*G*massSun*Msun/(c*c); }
   function unitTime(){ return rsMeters()/c; }
@@ -350,15 +378,49 @@ void main(){
     else if (gs > 10) v = 'Tides at the horizon would already be crushing for a person.';
     else v = 'A person would cross the horizon without feeling anything special.';
     document.getElementById('verdict').textContent = v;
-    const TH = 6.17e-8 / massSun;
-    document.getElementById('th').textContent = fmtNum(TH, 2) + ' K';
-    document.getElementById('te').textContent = fmtNum(2.1e67*Math.pow(massSun,3), 1) + ' years';
+    updateQuantum();
+  }
+
+  // ---- quantum: Hawking radiation (photon emission, black-body, no greybody factors) ----
+  const T_CMB = 2.725;
+  function hawkingT(){ return 6.17e-8 / massSun; }                       // kelvin
+  function hawkingPower(){ const kg = massSun*Msun; return 3.56e32/(kg*kg); } // watts
+  function lifetimeYears(m){ return 2.1e67*Math.pow(m,3); }
+  function band(lam){
+    if (lam > 1e-1) return 'radio'; if (lam > 1e-3) return 'microwave'; if (lam > 7e-7) return 'infrared';
+    if (lam > 4e-7) return 'visible light'; if (lam > 1e-8) return 'ultraviolet'; if (lam > 1e-11) return 'X-rays'; return 'gamma rays';
+  }
+  function bbJS(t){
+    t = Math.min(Math.max(t, 1000), 40000)/100; const cl = x => Math.min(Math.max(x,0),1);
+    const r = t <= 66 ? 1 : cl(1.29293618*Math.pow(t-60,-0.1332047592));
+    const g = t <= 66 ? cl(0.39008157*Math.log(t)-0.63184144) : cl(1.12989086*Math.pow(t-60,-0.0755148492));
+    const b = t >= 66 ? 1 : (t <= 19 ? 0 : cl(0.54320679*Math.log(t-10)-1.19625408));
+    return [r,g,b].map(x => Math.pow(x, 2.2));
+  }
+  function hawkColour(){
+    const T = hawkingT();
+    if (T < 1000) return { rgb:[0.42,0.04,0.03], trueColour:false };
+    if (T > 40000) return { rgb:[0.34,0.22,0.75], trueColour:false };
+    return { rgb:bbJS(T).map(x => x*0.8), trueColour:true };
+  }
+  function updateQuantum(){
+    const T = hawkingT(), lam = 2.898e-3/T;
+    document.getElementById('th').textContent = fmtNum(T, T >= 100 && T < 1e5 ? 0 : 2) + ' K';
+    document.getElementById('tlam').textContent = fmtLen(lam) + ', ' + band(lam);
+    document.getElementById('tpow').textContent = fmtNum(hawkingPower(), 2) + ' W';
+    document.getElementById('te').textContent = fmtNum(lifetimeYears(massSun), 1) + ' years';
+    document.getElementById('tcmb').textContent = T < T_CMB
+      ? 'Colder than the 2.7 K afterglow of the Big Bang, so today it absorbs more than it gives off and is still growing. It can only start to evaporate once the universe has cooled below ' + fmtNum(T, 2) + ' K.'
+      : 'Hotter than the 2.7 K afterglow of the Big Bang, so it is losing mass today.';
+    const hc = hawkColour(), hn = document.getElementById('hawkNote');
+    if (!hawkIn.checked) hn.textContent = 'The glow peaks at a wavelength about 16 times the horizon radius, at every mass: the light is always bigger than the hole.';
+    else hn.textContent = (hc.trueColour ? 'True colour. ' : 'False colour: the real glow is ' + band(lam) + ', invisible to the eye. ') + 'Brightness exaggerated: the real glow is far too faint to see.';
   }
 
   const massIn = document.getElementById('mass');
-  massIn.addEventListener('input', () => { massSun = Math.pow(10, parseFloat(massIn.value)); updateMass(); updateProbeText(); });
+  massIn.addEventListener('input', () => { resetEvap(); massSun = Math.pow(10, parseFloat(massIn.value)); updateMass(); updateProbeText(); });
   document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => {
-    massSun = parseFloat(b.dataset.m); massIn.value = Math.log10(massSun); updateMass(); updateProbeText(); }));
+    resetEvap(); massSun = parseFloat(b.dataset.m); massIn.value = Math.log10(massSun); updateMass(); updateProbeText(); }));
 
   const distIn = document.getElementById('dist');
   function setDist(d){ dist = Math.min(40, Math.max(6, d)); distIn.value = dist; document.getElementById('distLabel').textContent = dist.toFixed(1) + ' horizon radii'; }
@@ -434,6 +496,62 @@ void main(){
     document.getElementById('pmsg').textContent = msg;
   }
 
+  // ---- evaporation: M(t) = M0 (1 - t/t_life)^(1/3), shown over a fixed on-screen duration ----
+  const hawkIn = document.getElementById('hawk');
+  hawkIn.addEventListener('change', updateQuantum);
+  const EVAP_SECONDS = 24;
+  const evap = { on:false, f:0, m0:1 };
+  let gone = false;
+  const plot = document.getElementById('evapPlot'), pctx = plot.getContext('2d');
+  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#888'; }
+  function drawPlot(f){
+    const W = plot.width, H = plot.height, pad = 14;
+    pctx.clearRect(0,0,W,H);
+    pctx.strokeStyle = css('--line'); pctx.lineWidth = 2;
+    pctx.beginPath(); pctx.moveTo(pad, pad); pctx.lineTo(pad, H-pad); pctx.lineTo(W-pad, H-pad); pctx.stroke();
+    pctx.strokeStyle = css('--gold'); pctx.lineWidth = 3; pctx.beginPath();
+    for (let i=0;i<=200;i++){ const x = i/200, y = Math.cbrt(Math.max(1-x,0)); const px = pad + x*(W-2*pad), py = H-pad - y*(H-2*pad); i ? pctx.lineTo(px,py) : pctx.moveTo(px,py); }
+    pctx.stroke();
+    if (f != null){ const y = Math.cbrt(Math.max(1-f,0)); pctx.fillStyle = css('--red'); pctx.beginPath(); pctx.arc(pad + f*(W-2*pad), H-pad - y*(H-2*pad), 7, 0, 2*Math.PI); pctx.fill(); }
+    pctx.fillStyle = css('--muted'); pctx.font = '22px system-ui, sans-serif';
+    pctx.fillText('mass', pad+8, pad+18); pctx.textAlign = 'right'; pctx.fillText('time →', W-pad, H-pad-8); pctx.textAlign = 'left';
+  }
+  function evapText(){
+    const life = lifetimeYears(evap.m0)*3.156e7;
+    document.getElementById('eleft').textContent = evap.f >= 1 ? 'none' : evap.on || evap.f > 0 ? massText(massSun) + ' (' + fmtNum(Math.cbrt(Math.max(1-evap.f,0))*100, 1) + '%)' : '–';
+    document.getElementById('epass').textContent = evap.on || evap.f > 0 ? fmtTime(evap.f*life) : '–';
+    document.getElementById('erem').textContent = evap.on || evap.f > 0 ? fmtTime((1-evap.f)*life) : '–';
+  }
+  function finalBurst(){
+    const mLast = Math.cbrt(1/8.41e-17);          // kg left with one second to go
+    const joules = mLast*c*c, megatons = joules/4.184e15;
+    return 'Gone. In its last second it turned about ' + fmtNum(mLast/1000, 0) + ' tonnes of mass into ' + fmtNum(joules, 1) + ' joules, around ' + fmtNum(megatons/1e6, 0) + ' million megatons of TNT. The readouts above show the hole it started as. Move the mass slider or press Run evaporation to bring it back.';
+  }
+  function startEvap(){
+    if (gone){ gone = false; massSun = evap.m0; }
+    evap.on = true; evap.f = 0; evap.m0 = massSun;
+    hawkIn.checked = true; updateQuantum();
+    document.getElementById('evap').textContent = 'Restart';
+    document.getElementById('emsg').textContent = 'Running ' + fmtTime(lifetimeYears(evap.m0)*3.156e7) + ' of evaporation in ' + EVAP_SECONDS + ' seconds. Watch the glow heat up as the mass falls.';
+  }
+  function resetEvap(){ stopEvap(); gone = false; evap.f = 0; evapText(); drawPlot(null); document.getElementById('emsg').textContent = 'The mass barely moves for most of the hole\'s life. Losing mass makes it hotter, which makes it lose mass faster, so the end is sudden.'; }
+  function stopEvap(){ if (!evap.on) return; evap.on = false; document.getElementById('evap').textContent = 'Run evaporation'; }
+  function stepEvap(dt){
+    if (!evap.on) return;
+    evap.f = Math.min(1, evap.f + dt/EVAP_SECONDS);
+    massSun = Math.max(evap.m0*Math.cbrt(1-evap.f), 1e-300);
+    massIn.value = Math.max(-20, Math.log10(massSun));
+    if (evap.f >= 1){
+      stopEvap(); gone = true; massSun = evap.m0; massIn.value = Math.max(-20, Math.log10(massSun));
+      document.getElementById('emsg').textContent = finalBurst();
+      if (!reduceMotion){ const fl = document.getElementById('flash'); fl.style.transition = 'none'; fl.style.opacity = '0.9'; requestAnimationFrame(() => { fl.style.transition = ''; fl.style.opacity = '0'; }); }
+    }
+    updateMass(); updateProbeText(); evapText(); drawPlot(evap.f);
+  }
+  document.getElementById('evap').addEventListener('click', startEvap);
+  document.getElementById('evapStop').addEventListener('click', stopEvap);
+  drawPlot(null);
+
   // ---- toggles and sky image ----
   const diskIn = document.getElementById('disk'), gridIn = document.getElementById('grid');
   document.getElementById('file').addEventListener('change', e => {
@@ -450,6 +568,15 @@ void main(){
   const hideBtn = document.getElementById('hide');
   hideBtn.addEventListener('click', () => { const c = document.body.classList.toggle('collapsed'); hideBtn.textContent = c ? 'Show panel' : 'Hide panel'; hideBtn.setAttribute('aria-expanded', String(!c)); });
 
+  // ---- keep the black hole in the part of the screen the panel does not cover ----
+  const panelEl = document.getElementById('panel');
+  function viewOffset(){
+    if (document.body.classList.contains('collapsed')) return [0,0];
+    const b = panelEl.getBoundingClientRect(), k = canvas.width/window.innerWidth;
+    if (window.innerWidth <= 720) return [0, (window.innerHeight - b.top)/2*k];
+    return [b.right/2*k, 0];
+  }
+
   // ---- render ----
   let scale = window.innerWidth < 720 ? 0.45 : 0.7;
   function resize(){ const dpr = Math.min(window.devicePixelRatio||1, 2); canvas.width = Math.round(window.innerWidth*dpr*scale); canvas.height = Math.round(window.innerHeight*dpr*scale); gl.viewport(0,0,canvas.width,canvas.height); }
@@ -460,6 +587,7 @@ void main(){
     const dt = Math.min((now - last)/1000, 0.1); last = now;
     if (!reduceMotion) simTime += dt;
     stepProbe(dt*SPEED);
+    stepEvap(dt);
     if (dt > 0.05) { slow++; if (slow > 20 && scale > 0.3) { scale *= 0.8; resize(); slow = 0; } } else slow = Math.max(0, slow-1);
     const cam = camera();
     gl.uniform2f(U.uRes, canvas.width, canvas.height);
@@ -470,12 +598,16 @@ void main(){
     gl.uniform1f(U.uDiskOn, diskIn.checked ? 1 : 0);
     gl.uniform1f(U.uGridOn, gridIn.checked ? 1 : 0);
     gl.uniform1f(U.uSkyOn, skyOn);
+    const hk = hawkIn.checked ? hawkColour().rgb : [0,0,0];
+    gl.uniform3f(U.uHawk, hk[0], hk[1], hk[2]);
+    gl.uniform1f(U.uGone, gone ? 1 : 0);
+    const off = viewOffset(); gl.uniform2f(U.uOff, off[0], off[1]);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(U.uSky, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     textTimer += dt; if (textTimer > 0.1) { textTimer = 0; updateProbeText(); }
     requestAnimationFrame(frame);
   }
-  window.EHL = { probe, drop };
+  window.EHL = { probe, drop, evap, startEvap };
   updateMass(); updateProbeText();
   requestAnimationFrame(frame);
 })();
