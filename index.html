@@ -17,6 +17,7 @@
   --gold-ink: #1b1930;
   --red: #b3362a;
   --field: rgba(27,25,48,0.06);
+  --s-page: #b9781a; --s-hole: #3b6fb6; --s-rad: #a8438f;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -30,11 +31,13 @@
     --gold: #f2b24c;
     --red: #e0634e;
     --field: rgba(236,233,242,0.07);
+    --s-page: #c4862c; --s-hole: #5a88d4; --s-rad: #c25bb0;
   }
 }
 :root[data-theme="dark"]{
   --panel: rgba(12,11,24,0.78); --ink:#ece9f2; --muted:#a09db6; --line:rgba(236,233,242,0.14);
   --gold:#f2b24c; --red:#e0634e; --field:rgba(236,233,242,0.07);
+  --s-page:#c4862c; --s-hole:#5a88d4; --s-rad:#c25bb0;
 }
 *,*::before,*::after{ box-sizing: inherit; }
 html{ height:100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -72,6 +75,9 @@ button:focus-visible, input:focus-visible, .file:focus-within{ outline:2px solid
 .hide{ position:fixed; right:16px; top:calc(16px + env(safe-area-inset-top, 0px)); background:var(--panel); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
 body.collapsed .panel{ display:none; }
 @media (max-width: 1100px) and (min-width: 721px){ .panel{ width:300px; } h1{ font-size:26px; } }
+.row.nw span:last-child{ white-space:nowrap; }
+.legend{ display:flex; flex-wrap:wrap; gap:4px 14px; font-size:13px; color:var(--muted); margin:2px 0 6px; }
+.legend i{ display:inline-block; width:18px; height:0; border-top:3px solid; vertical-align:middle; margin-right:6px; }
 .plot{ position:static; inset:auto; width:100%; height:84px; display:block; cursor:default; touch-action:auto; background:var(--field); border-radius:8px; margin:10px 0 4px; }
 .cmp{ display:grid; grid-template-columns: 1.3fr 1fr 1fr; gap:4px 10px; margin:10px 0 2px; font-variant-numeric: tabular-nums; font-size:14px; }
 .cmp span[role=columnheader]{ font-weight:700; font-size:13px; }
@@ -118,7 +124,7 @@ h3{ font-size:14px; font-weight:700; margin:14px 0 6px; }
       <button class="primary" id="drop">Drop probe</button>
       <button id="reset">Remove</button>
     </div>
-    <div class="row" style="margin-top:10px"><span>Distance from centre</span><span id="pr">–</span></div>
+    <div class="row nw" style="margin-top:10px"><span>Distance</span><span id="pr">–</span></div>
     <div class="row"><span>Your clock, far away</span><span id="pt">–</span></div>
     <div class="row"><span>The probe's own clock</span><span id="ptau">–</span></div>
     <div class="row"><span>Light stretched by (1 + z)</span><span id="pz">–</span></div>
@@ -152,6 +158,18 @@ h3{ font-size:14px; font-weight:700; margin:14px 0 6px; }
     <div class="row"><span>Real time left</span><span id="erem">–</span></div>
     <p class="msg" id="emsg">The mass barely moves for most of the hole's life. Losing mass makes it hotter, which makes it lose mass faster, so the end is sudden.</p>
     <p class="note">The glow is often pictured as particle pairs splitting at the horizon. That picture is a helpful story, not the calculation. Whether what falls in is lost for good is the black hole information paradox, still unsolved.</p>
+
+    <h3>Where does the information go? The Page curve</h3>
+    <p class="note" style="margin-top:0">Entropy here counts how much you would need to know to pin down the exact state. Hawking's calculation says the radiation is thermal, so its entropy only ever climbs. But if physics never loses information, the radiation's entropy cannot exceed what the shrinking hole can hold: it has to turn over and fall back to zero.</p>
+    <canvas class="plot" id="pagePlot" width="600" height="220" style="height:110px" role="img" aria-label="Entropy against time. The hole's entropy falls, Hawking's count for the radiation rises all the way, and the Page curve follows the rising line until they cross, then the falling one down to zero."></canvas>
+    <div class="legend" aria-hidden="true"><span><i style="border-color:var(--s-page)"></i>Page curve</span><span><i style="border-color:var(--s-rad);border-top-style:dashed"></i>Hawking's count</span><span><i style="border-color:var(--s-hole);border-top-style:dotted"></i>The hole</span></div>
+    <div class="row nw"><span>The hole</span><span id="sHole">–</span></div>
+    <div class="row nw"><span>Radiation, Hawking</span><span id="sRad">–</span></div>
+    <div class="row nw"><span>Radiation, Page</span><span id="sPage">–</span></div>
+    <div class="row nw"><span>Page time</span><span id="sTime">–</span></div>
+    <div class="row nw"><span>Mass left by then</span><span id="sMass">–</span></div>
+    <p class="msg" id="smsg"></p>
+    <p class="note">In 2019, calculations using so-called islands reproduced this turnover from gravity itself, in simplified models. How the information actually gets out is still open.</p>
 
     <h3>Hold a probe still: the Unruh effect</h3>
     <p class="note" style="margin-top:0">An accelerating thermometer reads a temperature in empty space that a free-falling one does not. Staying put above a black hole takes rockets, so a hovering probe sits in a warm bath. Let it fall and the bath disappears.</p>
@@ -406,6 +424,7 @@ void main(){
     document.getElementById('verdict').textContent = v;
     updateQuantum();
     if (typeof updateUnruh === 'function') updateUnruh();
+    if (typeof pageText === 'function' && !evap.on) pageText();
   }
 
   // ---- quantum: Hawking radiation (photon emission, black-body, no greybody factors) ----
@@ -594,6 +613,7 @@ void main(){
     pctx.fillText('mass', pad+8, pad+18); pctx.textAlign = 'right'; pctx.fillText('time →', W-pad, H-pad-8); pctx.textAlign = 'left';
   }
   function evapText(){
+    if (typeof pageText === 'function'){ pageText(); drawPage(); }
     const life = lifetimeYears(evap.m0)*3.156e7;
     document.getElementById('eleft').textContent = evap.f >= 1 ? 'none' : evap.on || evap.f > 0 ? massText(massSun) + ' (' + fmtNum(Math.cbrt(Math.max(1-evap.f,0))*100, 1) + '%)' : '–';
     document.getElementById('epass').textContent = evap.on || evap.f > 0 ? fmtTime(evap.f*life) : '–';
@@ -625,9 +645,67 @@ void main(){
     }
     updateMass(); updateProbeText(); evapText(); drawPlot(evap.f);
   }
+  // ---- quantum stage 3: the information paradox (Page curve) ----
+  // Hole entropy S_BH = 4 pi G M^2 k_B / (hbar c), falling as (1 - f)^(2/3) during evaporation.
+  // Black-body photons emitted into empty space carry BETA = 4/3 units of entropy per unit the hole loses,
+  // so Hawking's count for the radiation is BETA * S0 * (1 - (1 - f)^(2/3)).
+  // If information is preserved, the radiation's entanglement entropy is the smaller of the two (the Page curve).
+  const BETA = 4/3, XP = BETA/(1 + BETA), F_PAGE = 1 - Math.pow(XP, 1.5);
+  function sHoleBits(mSun){ const kg = mSun*Msun; return 4*Math.PI*G*kg*kg/(1.0546e-34*c)/Math.LN2; }
+  const sHoleF = f => Math.pow(Math.max(1 - f, 0), 2/3);
+  const sRadF = f => BETA*(1 - sHoleF(f));
+  const sPageF = f => Math.min(sHoleF(f), sRadF(f));
+  const pplot = document.getElementById('pagePlot'), gctx = pplot.getContext('2d');
+  let pageHover = null;
+  function fmtBits(b){ return fmtNum(b, 2) + ' bits'; }
+  function drawPage(){
+    const W = pplot.width, H = pplot.height, pl = 14, pr = 14, pt = 14, pb = 14, ymax = BETA*1.05;
+    const X = f => pl + f*(W - pl - pr), Y = v => H - pb - v/ymax*(H - pt - pb);
+    gctx.clearRect(0,0,W,H);
+    gctx.strokeStyle = css('--line'); gctx.lineWidth = 2; gctx.setLineDash([]);
+    gctx.beginPath(); gctx.moveTo(pl, pt); gctx.lineTo(pl, H-pb); gctx.lineTo(W-pr, H-pb); gctx.stroke();
+    // Page time marker
+    gctx.beginPath(); gctx.moveTo(X(F_PAGE), pt); gctx.lineTo(X(F_PAGE), H-pb); gctx.stroke();
+    const curve = (fn, col, w, dash) => { gctx.strokeStyle = css(col); gctx.lineWidth = w; gctx.setLineDash(dash); gctx.beginPath();
+      for (let i=0;i<=240;i++){ const f = i/240, px = X(f), py = Y(fn(f)); i ? gctx.lineTo(px,py) : gctx.moveTo(px,py); } gctx.stroke(); };
+    curve(sHoleF, '--s-hole', 2, [3,5]);
+    curve(sRadF, '--s-rad', 2, [12,7]);
+    curve(sPageF, '--s-page', 4, []);
+    gctx.setLineDash([]);
+    gctx.font = '21px system-ui, sans-serif'; gctx.fillStyle = css('--muted');
+    gctx.fillText('entropy', pl+8, pt+18);
+    gctx.textAlign = 'center'; gctx.fillText('Page time', X(F_PAGE), H-pb-8); gctx.textAlign = 'right'; gctx.fillText('time →', W-pr, H-pb-8); gctx.textAlign = 'left';
+    const f = pageHover != null ? pageHover : (evap.on || evap.f > 0 ? evap.f : null);
+    if (f != null){
+      gctx.strokeStyle = css('--muted'); gctx.lineWidth = 1.5; gctx.beginPath(); gctx.moveTo(X(f), pt); gctx.lineTo(X(f), H-pb); gctx.stroke();
+      [['--s-hole', sHoleF(f)], ['--s-rad', sRadF(f)], ['--s-page', sPageF(f)]].forEach(([col, v]) => {
+        gctx.fillStyle = css(col); gctx.beginPath(); gctx.arc(X(f), Y(v), 7, 0, 2*Math.PI); gctx.fill();
+        gctx.strokeStyle = css('--panel'); gctx.lineWidth = 2; gctx.stroke(); });
+    }
+  }
+  function pageText(){
+    const active = evap.on || evap.f > 0;
+    const m0 = active ? evap.m0 : massSun, s0 = sHoleBits(m0), life = lifetimeYears(m0)*3.156e7;
+    const f = pageHover != null ? pageHover : (active ? evap.f : null);
+    document.getElementById('sTime').textContent = fmtTime(F_PAGE*life);
+    document.getElementById('sMass').textContent = fmtNum(Math.sqrt(XP)*100, 0) + '%';
+    document.getElementById('sHole').textContent = f == null ? fmtBits(s0) : fmtBits(s0*sHoleF(f));
+    document.getElementById('sRad').textContent = f == null ? '–' : fmtBits(s0*sRadF(f));
+    document.getElementById('sPage').textContent = f == null ? '–' : fmtBits(s0*sPageF(f));
+    let m;
+    if (f == null) m = 'Run the evaporation to follow the curves. The lines cross at the Page time, ' + fmtNum(F_PAGE*100, 0) + '% of the way through the hole\'s life.';
+    else if (f >= 1) m = 'The hole is gone. Hawking\'s count leaves the radiation with ' + fmtNum(BETA, 2) + ' times the entropy the hole started with, a mixed state: the information is lost. On the Page curve it ends at zero: the radiation holds everything that fell in, scrambled beyond recognition.';
+    else if (f < F_PAGE) m = 'Before the Page time the two answers agree: the radiation is entangled with the hole, so it looks random on its own.';
+    else m = 'Past the Page time. Hawking\'s count is now more than the shrinking hole can hold. If information is preserved, each new photon now carries some out, and the radiation\'s entropy falls.';
+    document.getElementById('smsg').textContent = m;
+  }
+  function pageFromEvent(e){ const b = pplot.getBoundingClientRect(), k = pplot.width/b.width; return Math.min(1, Math.max(0, ((e.clientX - b.left)*k - 14)/(pplot.width - 28))); }
+  pplot.addEventListener('pointermove', e => { pageHover = pageFromEvent(e); drawPage(); pageText(); });
+  pplot.addEventListener('pointerleave', () => { pageHover = null; drawPage(); pageText(); });
+
   document.getElementById('evap').addEventListener('click', startEvap);
   document.getElementById('evapStop').addEventListener('click', stopEvap);
-  drawPlot(null);
+  drawPlot(null); drawPage(); pageText();
 
   // ---- toggles and sky image ----
   const diskIn = document.getElementById('disk'), gridIn = document.getElementById('grid');
@@ -686,7 +764,7 @@ void main(){
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     textTimer += dt; if (textTimer > 0.1) { textTimer = 0; updateProbeText(); }
   }
-  window.EHL = { probe, drop, evap, startEvap, hoverAt, fallFrom, unruhT, hawkingT };
+  window.EHL = { probe, drop, evap, startEvap, hoverAt, fallFrom, unruhT, hawkingT, F_PAGE, sHoleBits };
   updateMass(); updateProbeText(); updateUnruh();
   requestAnimationFrame(frame);
 })();

@@ -40,7 +40,13 @@ then go to http://localhost:8000.
 - **Against the Hawking temperature.** The ratio is T_Unruh / T_Hawking = 1 / (ρ²√(1 − 1/ρ)) with ρ = r / r_s, the same at every mass. Close to the horizon the bath matches the Hawking glow as measured at that height, T_H / √(1 − r_s/r); far out it fades and the Hawking glow itself is what remains.
 - **Hover, then let go.** "Hover a probe here" holds the probe on rockets, with a halo in the colour of its bath and its clock running slow by 1/√(1 − r_s/r). "Let it fall" releases it from rest at that height: the bath readout drops to none at once, and the probe falls in on its own clock while its image freezes at the edge.
 
-**Stage 3, the information paradox (planned).** A Page-curve panel tied to the evaporation run: the entanglement entropy of the radiation rising, then, if information is preserved, turning over at the halfway point.
+**Stage 3, the information paradox (built).**
+
+- **Three curves, one plot**, tied to the evaporation run. The hole's entropy S = 4πGM²k_B/(ħc) (about 1.5 × 10⁷⁷ bits for one solar mass) falls as (1 − t/t_life)^(2/3). Hawking's count for the radiation rises to the end. The Page curve, what the radiation's entropy must be if information is preserved, follows whichever of the two is smaller.
+- **Entropy carried off.** Black-body photons emitted into empty space carry 4/3 units of entropy per unit the hole loses. Hawking's count therefore ends at 4/3 of the hole's starting entropy, a mixed state. The Page curve ends at zero, a pure state.
+- **The Page time.** The curves cross at 57% of the lifetime, with 76% of the mass (57% of the entropy) left. Before it the two answers agree; after it they cannot both be right.
+- **Readouts** in bits for the chosen mass, a marker that follows the run, and a hover crosshair to read any moment of the life.
+- **Where the physics stands.** The panel notes that in 2019, "island" calculations reproduced the turnover from gravity itself in simplified models, and that how the information gets out is still open.
 
 ## Known approximations
 
@@ -53,6 +59,7 @@ then go to http://localhost:8000.
 - The on-screen Hawking glow is uniform in colour and scaled to be visible; the real glow is far too faint to see.
 - The Unruh bath uses the hovering probe's local proper acceleration only. The falling probe is shown with no bath, leaving out the faint Hawking glow passing it. The halo around a hovering probe is false colour outside 1,000 to 40,000 K and always exaggerated.
 - Height above the horizon is the Schwarzschild coordinate r − r_s, not the distance a ruler would measure.
+- The Page curve is the idealised min(hole, radiation) shape, not a calculation of how information escapes. The 4/3 entropy ratio is for photons alone into empty space; Page's full calculation with photons, gravitons and greybody factors gives about 1.48 and a Page time near 54% of the lifetime.
 
 ## Using your own sky
 
