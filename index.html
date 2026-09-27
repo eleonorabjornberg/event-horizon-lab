@@ -73,6 +73,10 @@ button:focus-visible, input:focus-visible, .file:focus-within{ outline:2px solid
 body.collapsed .panel{ display:none; }
 @media (max-width: 1100px) and (min-width: 721px){ .panel{ width:300px; } h1{ font-size:26px; } }
 .plot{ position:static; inset:auto; width:100%; height:84px; display:block; cursor:default; touch-action:auto; background:var(--field); border-radius:8px; margin:10px 0 4px; }
+.cmp{ display:grid; grid-template-columns: 1.3fr 1fr 1fr; gap:4px 10px; margin:10px 0 2px; font-variant-numeric: tabular-nums; font-size:14px; }
+.cmp span[role=columnheader]{ font-weight:700; font-size:13px; }
+.cmp span[role=rowheader]{ color:var(--muted); }
+button:disabled{ opacity:0.45; cursor:default; }
 h3{ font-size:14px; font-weight:700; margin:14px 0 6px; }
 .flash{ position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 1.6s ease-out; }
 .err{ position:fixed; inset:auto 16px calc(16px + env(safe-area-inset-bottom,0px)) auto; max-width:320px; background:var(--panel); padding:12px; border-radius:10px; display:none; }
@@ -119,6 +123,7 @@ h3{ font-size:14px; font-weight:700; margin:14px 0 6px; }
     <div class="row"><span>The probe's own clock</span><span id="ptau">–</span></div>
     <div class="row"><span>Light stretched by (1 + z)</span><span id="pz">–</span></div>
     <div class="row"><span>Tidal pull across a 2 m probe</span><span id="ptid">–</span></div>
+    <div class="row"><span>Warm bath it feels</span><span id="pbath">–</span></div>
     <div class="row"><span>Probe</span><span id="pstate">–</span></div>
     <div class="row"><span>One second on screen</span><span id="pplay">–</span></div>
     <div class="zbar" aria-hidden="true"><i id="zfill"></i></div>
@@ -147,6 +152,23 @@ h3{ font-size:14px; font-weight:700; margin:14px 0 6px; }
     <div class="row"><span>Real time left</span><span id="erem">–</span></div>
     <p class="msg" id="emsg">The mass barely moves for most of the hole's life. Losing mass makes it hotter, which makes it lose mass faster, so the end is sudden.</p>
     <p class="note">The glow is often pictured as particle pairs splitting at the horizon. That picture is a helpful story, not the calculation. Whether what falls in is lost for good is the black hole information paradox, still unsolved.</p>
+
+    <h3>Hold a probe still: the Unruh effect</h3>
+    <p class="note" style="margin-top:0">An accelerating thermometer reads a temperature in empty space that a free-falling one does not. Staying put above a black hole takes rockets, so a hovering probe sits in a warm bath. Let it fall and the bath disappears.</p>
+    <label for="hov" class="note" style="display:block;margin:0">Height above the horizon: <strong id="hovLabel"></strong></label>
+    <input id="hov" type="range" min="-6" max="2" step="0.01" value="0">
+    <div class="actions">
+      <button class="primary" id="hover">Hover a probe here</button>
+      <button id="letgo" disabled>Let it fall</button>
+    </div>
+    <div class="cmp" role="table" aria-label="Hovering and falling probes at the same height compared">
+      <span role="columnheader"></span><span role="columnheader">Hovering</span><span role="columnheader">Falling</span>
+      <span role="rowheader">Thrust to stay put</span><span id="uAcc"></span><span>0 g, weightless</span>
+      <span role="rowheader">Warm bath it feels</span><span id="uT"></span><span>none</span>
+      <span role="rowheader">Against the Hawking temperature</span><span id="uRatio"></span><span>–</span>
+    </div>
+    <p class="msg" id="umsg"></p>
+    <p class="note" id="unote">On Earth, standing still takes 1 g, which puts you in an Unruh bath of 4 × 10⁻²⁰ K: far too cold to ever measure. Near a horizon the thrust, and the bath, grow without limit. The glow drawn around a hovering probe is false colour unless the bath is 1,000 to 40,000 K, and always exaggerated.</p>
   </section>
 
   <section>
@@ -187,6 +209,7 @@ uniform sampler2D uSky;
 uniform vec3 uHawk;
 uniform float uGone;
 uniform vec2 uOff;
+uniform vec3 uBath;
 
 const float PI = 3.14159265;
 
@@ -249,6 +272,7 @@ void main(){
   float h2 = dot(L, L);
   vec3 col = vec3(0.0);
   float trans = 1.0;
+  float minD = 99.0, transMin = 1.0;
   for (int i = 0; i < 420; i++) {
     float r2 = dot(x, x);
     float r = sqrt(r2);
@@ -267,6 +291,7 @@ void main(){
       vec3 sg = B - A;
       float tt = clamp(-dot(A, sg)/max(dot(sg,sg),1e-6), 0.0, 1.0);
       float dObj = length(A + sg*tt);
+      if (dObj < minD) { minD = dObj; transMin = trans; }
       if (dObj < 1.0) {
         float limb = sqrt(1.0 - dObj*dObj);
         float g = uObjG;
@@ -303,6 +328,7 @@ void main(){
     }
     x = xn; v = vn;
   }
+  if (uObjOn > 0.5) col += transMin * uBath * smoothstep(2.6, 1.0, minD) * (0.8 + 0.2*sin(uTime*2.0));
   col = 1.0 - exp(-col*1.1);
   col = pow(col, vec3(1.0/2.2));
   gl_FragColor = vec4(col, 1.0);
@@ -326,7 +352,7 @@ void main(){
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = {}; ['uRes','uTime','uCamPos','uFwd','uRight','uUp','uObjPos','uObjOn','uObjG','uObjS','uObjDir','uDiskOn','uGridOn','uSkyOn','uSky','uHawk','uGone','uOff'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  const U = {}; ['uRes','uTime','uCamPos','uFwd','uRight','uUp','uObjPos','uObjOn','uObjG','uObjS','uObjDir','uDiskOn','uGridOn','uSkyOn','uSky','uHawk','uGone','uOff','uBath'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
 
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0,0,0,255]));
@@ -338,7 +364,7 @@ void main(){
   // ---- state ----
   let yaw = 0.35, pitch = 0.16, dist = 22;
   let massSun = 1;
-  const probe = { on:false, r0:10, r:10, t:0, tau:0, E:1, dir:[1,0,0], tauH:0 };
+  const probe = { on:false, hover:false, r0:10, r:10, t:0, tau:0, E:1, dir:[1,0,0], tauH:0 };
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---- physical constants ----
@@ -379,6 +405,7 @@ void main(){
     else v = 'A person would cross the horizon without feeling anything special.';
     document.getElementById('verdict').textContent = v;
     updateQuantum();
+    if (typeof updateUnruh === 'function') updateUnruh();
   }
 
   // ---- quantum: Hawking radiation (photon emission, black-body, no greybody factors) ----
@@ -446,19 +473,32 @@ void main(){
   canvas.addEventListener('wheel', e => { e.preventDefault(); setDist(dist * Math.exp(e.deltaY*0.001)); }, {passive:false});
 
   // ---- probe: radial free fall from rest, units r_s = c = 1 ----
-  function drop(){
+  function probeDir(){
     const cam = camera();
-    const d = norm([cam.r[0]*0.8 - cam.f[0]*0.3 + cam.u[0]*0.6, cam.r[1]*0.8 - cam.f[1]*0.3 + cam.u[1]*0.6, cam.r[2]*0.8 - cam.f[2]*0.3 + cam.u[2]*0.6]);
-    probe.on = true; probe.r0 = 10; probe.r = 10*0.9999; probe.t = 0; probe.tau = 0; probe.dir = d;
-    probe.E = Math.sqrt(1 - 1/probe.r0);
-    const ce = 2/probe.r0 - 1, eta = Math.acos(ce);
-    probe.tauH = Math.pow(probe.r0,1.5)/2*(eta + Math.sin(eta));
+    return norm([cam.r[0]*0.8 - cam.f[0]*0.3 + cam.u[0]*0.6, cam.r[1]*0.8 - cam.f[1]*0.3 + cam.u[1]*0.6, cam.r[2]*0.8 - cam.f[2]*0.3 + cam.u[2]*0.6]);
+  }
+  // free fall from rest at r0 (keeps direction and clocks when let go from a hover)
+  function fallFrom(r0, keep){
+    if (!keep){ probe.dir = probeDir(); probe.t = 0; probe.tau = 0; }
+    probe.on = true; probe.hover = false; probe.r0 = r0;
+    probe.r = 1 + (r0 - 1)*(1 - 1e-4);
+    probe.E = Math.sqrt(1 - 1/r0);
+    const eta = Math.acos(2/r0 - 1);
+    probe.tauH = probe.tau + Math.pow(r0,1.5)/2*(eta + Math.sin(eta));
+    updateUnruh(); updateProbeText();
+  }
+  function drop(){ fallFrom(10, false); }
+  function hoverAt(r){
+    if (!probe.on || !probe.hover){ probe.dir = probeDir(); probe.t = 0; probe.tau = 0; }
+    probe.on = true; probe.hover = true; probe.r = r; probe.r0 = r;
+    updateUnruh(); updateProbeText();
   }
   document.getElementById('drop').addEventListener('click', drop);
-  document.getElementById('reset').addEventListener('click', () => { probe.on = false; updateProbeText(); });
+  document.getElementById('reset').addEventListener('click', () => { probe.on = false; probe.hover = false; updateProbeText(); updateUnruh(); });
 
   function stepProbe(dtSim){
     if (!probe.on) return;
+    if (probe.hover){ probe.t += dtSim; probe.tau += Math.sqrt(1 - 1/probe.r)*dtSim; return; }
     const n = 40, h = dtSim/n;
     for (let i=0;i<n;i++){
       const r = probe.r, f = 1 - 1/r;
@@ -472,10 +512,10 @@ void main(){
   const SPEED = 9;
   function probeTidalG(){ const rm = probe.r*rsMeters(); return 2*G*massSun*Msun*2/(rm*rm*rm)/9.81; }
   function probeStretch(){ const tg = probeTidalG(); return tg <= 10 ? 1 : Math.min(8, 1 + 0.8*Math.log10(tg/10)); }
-  function probeZ(){ const f = Math.max(1 - 1/probe.r, 1e-13); const E = probe.E; return (E + Math.sqrt(Math.max(E*E - f, 0)))/f; }
+  function probeZ(){ const f = Math.max(1 - 1/probe.r, 1e-13); if (probe.hover) return 1/Math.sqrt(f); const E = probe.E; return (E + Math.sqrt(Math.max(E*E - f, 0)))/f; }
 
   function updateProbeText(){
-    const ids = ['pr','pt','ptau','pz','ptid','pstate','pplay'];
+    const ids = ['pr','pt','ptau','pz','ptid','pstate','pplay','pbath'];
     if (!probe.on){ ids.forEach(i => document.getElementById(i).textContent = '–'); document.getElementById('zfill').style.width = '0';
       document.getElementById('pmsg').textContent = 'Watch it from here: it slows, reddens and fades at the edge, but never crosses.'; return; }
     const T = unitTime();
@@ -488,13 +528,50 @@ void main(){
     document.getElementById('zfill').style.width = Math.min(100, Math.log10(z)/4*100) + '%';
     const tg = probeTidalG();
     document.getElementById('ptid').textContent = fmtNum(tg, 1) + ' g';
-    document.getElementById('pstate').textContent = tg > 1000 ? 'Spaghettified' : (tg > 10 ? 'Stretching' : 'Intact');
+    const shape = tg > 1000 ? 'Spaghettified' : (tg > 10 ? 'Stretching' : 'Intact');
+    document.getElementById('pstate').textContent = probe.hover ? shape + ', hovering' : shape;
+    document.getElementById('pbath').textContent = probe.hover ? fmtTemp(unruhT(probe.r)) : 'none';
     document.getElementById('pplay').textContent = '≈ ' + fmtTime(SPEED*T) + ' of real fall';
-    const msg = above < 1e-3
+    const msg = probe.hover
+      ? 'Hovering on rockets at ' + fmtNum(unruhA(probe.r)/9.81, 1) + ' g. Its clock runs ' + fmtNum(1/Math.sqrt(1 - 1/probe.r), 2) + ' times slower than yours.'
+      : above < 1e-3
       ? 'On its own clock the probe crossed at ' + fmtTime(probe.tauH*T) + ' and is already inside. From out here, its image is frozen at the edge and fading.'
       : 'Distances are in horizon radii (r). One r here is ' + fmtLen(rsMeters()) + '.';
     document.getElementById('pmsg').textContent = msg;
   }
+
+  // ---- quantum stage 2: the Unruh effect ----
+  // A probe held at fixed r needs proper acceleration a = GM / (r^2 sqrt(1 - r_s/r)).
+  // An accelerated thermometer in vacuum reads T = hbar a / (2 pi c k_B).
+  // In units of the Hawking temperature this is T/T_H = 1 / (rho^2 sqrt(1 - 1/rho)), rho = r/r_s, for every mass.
+  const UNRUH_K = 1.0546e-34/(2*Math.PI*2.998e8*1.3807e-23);   // kelvin per (m/s^2), about 4.06e-21
+  function unruhA(rho){ return c*c/(2*rsMeters()*rho*rho*Math.sqrt(Math.max(1 - 1/rho, 1e-300))); }
+  function unruhT(rho){ return UNRUH_K*unruhA(rho); }
+  function fmtTemp(T){ return fmtNum(T, T >= 100 && T < 1e5 ? 0 : 2) + ' K'; }
+  function tempColour(T){
+    if (T < 1000) return [0.42,0.04,0.03];
+    if (T > 40000) return [0.34,0.22,0.75];
+    return bbJS(T).map(x => x*0.8);
+  }
+  const hovIn = document.getElementById('hov'), letgoBtn = document.getElementById('letgo');
+  function hovRho(){ return 1 + Math.pow(10, parseFloat(hovIn.value)); }
+  function updateUnruh(){
+    const rho = hovRho(), above = rho - 1;
+    document.getElementById('hovLabel').textContent = fmtNum(above, above < 0.01 ? 1 : 2) + ' r (' + fmtLen(above*rsMeters()) + ')';
+    const a = unruhA(rho), T = unruhT(rho), ratio = T/hawkingT();
+    document.getElementById('uAcc').textContent = fmtNum(a/9.81, 1) + ' g';
+    document.getElementById('uT').textContent = fmtTemp(T);
+    document.getElementById('uRatio').textContent = ratio < 0.01 ? '1/' + fmtNum(1/ratio, 0) + ' of it' : fmtNum(ratio, 2) + '×';
+    let m;
+    if (above < 0.01) m = 'Close to the horizon the hovering probe\'s bath matches the Hawking glow as measured at that height, and both grow without limit. Let go and the bath vanishes: a falling probe crosses without noticing anything.';
+    else if (above > 10) m = 'Far out, the rockets barely work and the bath is ' + fmtNum(1/ratio, 0) + ' times colder than the Hawking glow. A thermometer here mostly sees that glow, arriving from the hole.';
+    else m = 'The same place, two thermometers. The one on rockets reads ' + fmtTemp(T) + '; the one in free fall reads nothing. Temperature here depends on how you move.';
+    document.getElementById('umsg').textContent = m;
+    letgoBtn.disabled = !(probe.on && probe.hover);
+  }
+  hovIn.addEventListener('input', () => { if (probe.on && probe.hover) hoverAt(hovRho()); else updateUnruh(); });
+  document.getElementById('hover').addEventListener('click', () => hoverAt(hovRho()));
+  letgoBtn.addEventListener('click', () => { if (probe.on && probe.hover) fallFrom(probe.r, true); });
 
   // ---- evaporation: M(t) = M0 (1 - t/t_life)^(1/3), shown over a fixed on-screen duration ----
   const hawkIn = document.getElementById('hawk');
@@ -602,13 +679,15 @@ void main(){
     const hk = hawkIn.checked ? hawkColour().rgb : [0,0,0];
     gl.uniform3f(U.uHawk, hk[0], hk[1], hk[2]);
     gl.uniform1f(U.uGone, gone ? 1 : 0);
+    const bc = (probe.on && probe.hover) ? tempColour(unruhT(probe.r)).map(x => x*0.9) : [0,0,0];
+    gl.uniform3f(U.uBath, bc[0], bc[1], bc[2]);
     const off = viewOffset(); gl.uniform2f(U.uOff, off[0], off[1]);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(U.uSky, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     textTimer += dt; if (textTimer > 0.1) { textTimer = 0; updateProbeText(); }
   }
-  window.EHL = { probe, drop, evap, startEvap };
-  updateMass(); updateProbeText();
+  window.EHL = { probe, drop, evap, startEvap, hoverAt, fallFrom, unruhT, hawkingT };
+  updateMass(); updateProbeText(); updateUnruh();
   requestAnimationFrame(frame);
 })();
 </script>

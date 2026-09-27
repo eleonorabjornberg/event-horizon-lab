@@ -33,7 +33,12 @@ then go to http://localhost:8000.
 - **Evaporation.** M(t) = M₀(1 − t/t_life)^(1/3), played over 24 seconds with a mass-time curve. Most of the life changes almost nothing; the end is sudden. The last second releases about 2 × 10²² J from about 230 tonnes of mass.
 - **Mass range** now runs down to 10⁻²⁰ solar masses, with mountain-mass and Moon-mass presets, so hot, fast-evaporating holes can be explored.
 
-**Stage 2, the Unruh effect (planned).** A probe held at a fixed height above the horizon feels a warm bath of radiation that a freely falling probe does not. A side-by-side toggle for the probe.
+**Stage 2, the Unruh effect (built).**
+
+- **The effect.** A thermometer accelerating through empty space reads a temperature T = ħa / (2πck_B), about 4 × 10⁻²⁰ K for 1 g. One in free fall reads nothing.
+- **Hovering above the hole.** Staying at a fixed radius r takes a proper acceleration a = GM / (r²√(1 − r_s/r)), which grows without limit at the horizon. A height slider (10⁻⁶ to 100 horizon radii above it) shows the thrust in g and the bath temperature, side by side with a falling probe at the same height.
+- **Against the Hawking temperature.** The ratio is T_Unruh / T_Hawking = 1 / (ρ²√(1 − 1/ρ)) with ρ = r / r_s, the same at every mass. Close to the horizon the bath matches the Hawking glow as measured at that height, T_H / √(1 − r_s/r); far out it fades and the Hawking glow itself is what remains.
+- **Hover, then let go.** "Hover a probe here" holds the probe on rockets, with a halo in the colour of its bath and its clock running slow by 1/√(1 − r_s/r). "Let it fall" releases it from rest at that height: the bath readout drops to none at once, and the probe falls in on its own clock while its image freezes at the edge.
 
 **Stage 3, the information paradox (planned).** A Page-curve panel tied to the evaporation run: the entanglement entropy of the radiation rising, then, if information is preserved, turning over at the halfway point.
 
@@ -46,6 +51,8 @@ then go to http://localhost:8000.
 - Hawking emission counts photons only and ignores greybody factors, so the power is too low and the lifetime too long for small holes, which also emit neutrinos, gravitons and heavier particles once hot enough.
 - Evaporation ignores the cosmic microwave background, so it runs even for holes that are growing today; the panel says so.
 - The on-screen Hawking glow is uniform in colour and scaled to be visible; the real glow is far too faint to see.
+- The Unruh bath uses the hovering probe's local proper acceleration only. The falling probe is shown with no bath, leaving out the faint Hawking glow passing it. The halo around a hovering probe is false colour outside 1,000 to 40,000 K and always exaggerated.
+- Height above the horizon is the Schwarzschild coordinate r − r_s, not the distance a ruler would measure.
 
 ## Using your own sky
 
